@@ -1,0 +1,16 @@
+# Exported from 3D Builder
+
+newmtl initialShadingGroup
+Kd 0.500000 0.500000 0.500000
+
+newmtl lambert3SG
+Kd 1.000000 1.000000 1.000000
+map_Kd road.jpg
+
+newmtl lambert4SG
+Kd 1.000000 1.000000 1.000000
+map_Kd beach.jpg
+
+newmtl lambert2SG
+Kd 1.000000 1.000000 1.000000
+map_Kd wall.jpg

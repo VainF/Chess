@@ -1,0 +1,46 @@
+# Exported from 3D Builder
+
+newmtl Turquoise
+Kd 0.000000 0.627451 0.909804
+
+newmtl White
+Kd 1.000000 1.000000 1.000000
+map_Kd walnut.jpg
+
+newmtl White
+Kd 1.000000 1.000000 1.000000
+map_Kd walnut.jpg
+
+newmtl White_0
+Kd 1.000000 1.000000 1.000000
+map_Kd oak.jpg
+
+newmtl White_1
+Kd 1.000000 1.000000 1.000000
+map_Kd papyrus.jpg
+
+newmtl Turquoise
+Kd 0.000000 0.627451 0.909804
+
+newmtl White_2
+Kd 1.000000 1.000000 1.000000
+map_Kd sttionry.jpg
+
+newmtl White_3
+Kd 1.000000 1.000000 1.000000
+map_Kd brmarble.jpg
+
+newmtl White_1
+Kd 1.000000 1.000000 1.000000
+map_Kd papyrus.jpg
+
+newmtl Turquoise
+Kd 0.000000 0.627451 0.909804
+
+newmtl White
+Kd 1.000000 1.000000 1.000000
+map_Kd walnut.jpg
+
+newmtl White_4
+Kd 1.000000 1.000000 1.000000
+map_Kd parchmnt.jpg

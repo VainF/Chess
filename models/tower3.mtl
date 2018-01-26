@@ -1,0 +1,22 @@
+# Exported from 3D Builder
+
+newmtl initialShadingGroup
+Kd 0.501961 0.501961 0.501961
+
+newmtl White
+Kd 1.000000 1.000000 1.000000
+
+newmtl White_0
+Kd 1.000000 1.000000 1.000000
+map_Kd walnut.jpg
+
+newmtl 
+Kd 1.000000 1.000000 1.000000
+
+newmtl White_1
+Kd 1.000000 1.000000 1.000000
+map_Kd stone.jpg
+
+newmtl White_2
+Kd 1.000000 1.000000 1.000000
+map_Kd gate_tex.jpg

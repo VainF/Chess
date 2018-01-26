@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+	<head>
+		<meta charset="UTF-8" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1"> 
+        <title>CHESS</title>      
+        <link rel="stylesheet" type="text/css" href="css/style.css" />
+        <style type="text/css">		
+		div#container_buttons {			
+			cursor: pointer;
+			width: 100%;
+			height: 800px;
+			background-color: black;
+			border: none;
+			
+		}
+		p{
+		 	position: absolute;
+		 	left:600px;
+		 	top:470px;
+		 	color: black;
+		 	font: inherit;
+		 }
+		 img#start_pic{
+		 	position: absolute;
+		 	left:200px;
+		 	top:50px;
+		 }	
+		 img#start_title{
+		 	position: absolute;
+		 	left:200px;
+		 	top:100px;
+		 	z-index:999;
+		 }		
+	</style>
+    </head>
+    <body>
+    	<div id="container_buttons">
+    	<img id ="start_title" src="img/title.png" width='980' height='186'/>
+    	<img id ="start_pic" src="img/start.jpg" width='1000' height='625'/>
+    	
+        <p onclick="window.location.href='chess.html';">
+            <a href="#" class="StartButton">
+                START
+            </a>
+        </p>
+       </div>
+    </body>
+</html>

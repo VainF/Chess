@@ -1,0 +1,1759 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<title>CHESS</title>
+	<script src="js/Three.js"></script>
+    <script src="js/OBJLoader.js"></script>
+    <script src="js/DDSLoader.js"></script>
+    <script src="js/MTLLoader.js"></script>
+    <script src="js/OrbitControls.js"></script>
+    <script src="js/alertify.js"></script>
+    <script src="js/Water.js"></script>
+    <script src="js/dat.gui.min.js"></script>
+    <script src="js/stats.min.js"></script>
+	<style type="text/css">		
+		div#canvas-frame {			
+			cursor: pointer;
+			width: 100%;
+			height: 650px;
+			background-color: #EEEEEE;
+			border: none;
+			
+		}
+        body {
+            color: #000;
+            font-family:Monospace;
+            font-size:13px;
+            margin: 0px;
+            overflow: hidden;
+        }
+
+        #info {
+            
+            top: 0px; width: 100%;
+            text-align:center;
+            padding: 5px;
+        }
+		form{
+		 	position: absolute;
+		 	color: white;
+		 	font: inherit;
+		 }	
+		button{
+		 	position: absolute;
+		 	left:5px;
+		 	top:75px;
+		 	color: black;
+		 	font: inherit;
+		 }	
+	</style>
+	<script>
+        var stats;
+        var enable_roam = false;
+        var gui_params = {
+            shadows: true,
+            water: true,
+            roam: false,
+            directionalLight: 0.9,
+            ambientLight: 0.2,
+            roamSpeed: 1
+        };
+
+        function initGUI(){
+            var container = document.getElementById( 'canvas-frame' );
+
+            // = new Stats();
+            //container.appendChild( stats.dom );
+            var gui = new dat.GUI();
+
+            gui.add( gui_params, 'shadows' );
+            gui.add( gui_params, 'water' );
+            gui.add( gui_params, 'roam' );
+            gui.add( gui_params, 'directionalLight', 0, 1 );
+            gui.add( gui_params, 'ambientLight', 0, 1 );
+            gui.add( gui_params, 'roamSpeed', 0.5, 2 );
+            gui.open();
+        }
+
+		var ChessSet = new THREE.Group();
+        var unit_length = 30;
+        var board_thick = unit_length/25;
+        var chesses = [];
+		var mesh_list = [];
+		
+		// speed of move
+		var v_jump = 4;
+		var v_move = 5;
+        var fade_v = 0.2;
+        var down_speed = 2;
+
+        var roam_height = 15;
+        var animating = false;
+        var renderer;
+        //初始化Three绘制canvas
+        function initThree() { 
+            width = document.getElementById('canvas-frame').clientWidth;
+            height = document.getElementById('canvas-frame').clientHeight;
+            renderer = new THREE.WebGLRenderer({
+                antialias : true,
+    			preserveDrawingBuffer: true 
+            });
+            renderer.setSize(width, height);
+            document.getElementById('canvas-frame').appendChild(renderer.domElement);
+            renderer.setClearColor(0x123456, 1.0);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            window.addEventListener( 'resize', onWindowResize, false );  // 监听窗口缩放函数
+            document.addEventListener( 'keydown', onKeyDown, false );    // 监听键盘按下函数
+        }
+
+        var parameters = {
+            oceanSide: 2000,
+            size: 1.0,
+            distortionScale: 3.7,
+            alpha: 1.0
+        };
+        var camera;
+        var controls;
+        var raycaster;
+        var mouse;
+        var INTERSECTED;
+        function initCamera() {
+            camera = new THREE.PerspectiveCamera(45, width / height, 1, 10000);
+            camera.position.x = 350;
+            camera.position.y = 250;
+            camera.position.z = 200;
+            camera.up.x = 0;
+            camera.up.y = 0;
+            camera.up.z = 1;
+            camera.lookAt(0, 0, 0);
+
+            controls = new THREE.OrbitControls( camera, renderer.domElement );
+            controls.target.set( 0, 2, 0 );
+            controls.maxPolarAngle = Math.PI * 0.495;
+            controls.update();
+
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+            document.addEventListener( 'mousemove', onDocumentMouseMove, false );
+            document.addEventListener( 'mousedown', onDocumentMouseDown, false );
+        }
+
+        var scene;
+        function initScene() {
+            scene = new THREE.Scene();
+        }
+
+        var ambientlight;
+        var directionallight;
+        function initLight() {
+            ambientlight = new THREE.AmbientLight(0xFFFFFF,0.2);
+            scene.add(ambientlight);                                                        
+
+            directionallight = new THREE.DirectionalLight(0xFFFFFF,0.9);
+            directionallight.position.set(800,1200,1100);
+            //directionallight.position.set(8000,8000,6000);
+            directionallight.castShadow = true;
+
+            directionallight.shadowCameraNear = 2;
+            directionallight.shadowCameraFar = 3000;
+            directionallight.shadowCameraLeft = -1000;
+            directionallight.shadowCameraRight = 1000;
+            directionallight.shadowCameraTop = 1000;
+            directionallight.shadowCameraBottom = -1000;
+
+            scene.add(directionallight);                       
+        }       
+
+
+
+		var animation_enable= false;
+		var broken_list = [];
+		var bound_z=[];
+        function loadBrokenModule(dx, dy)
+        {
+			var path;
+			if(this.name=='knight'){
+				path = 'models/Knight-broken.obj';	//
+				bound_z=[0,-10,-10,-15,-20,-15,-20,-20];
+			}
+			else if(this.name=='rook'){
+				path = 'models/Rook-broken.obj';
+				bound_z =[-20,-40,-10,-30,-0,-20];
+			}
+			else if(this.name=='queen'){
+				path = 'models/Queen-broken.obj';
+				bound_z =[-0,-20,-10,-30,-40,-50];
+			}
+			else if(this.name=='king'){
+				path = 'models/King-broken.obj';
+				bound_z =[-0,-15,-30,-40,-50];
+			}
+			else if(this.name=='pawn'){
+				path = 'models/Pawn-broken.obj';
+				bound_z =[-0,-5,-11,-22];
+			}
+			else if(this.name=='bishop'){
+				path = 'models/Bishop-broken.obj';
+				bound_z =[-4,-0,-5,-5,-20,-20,-30];
+			}
+			else
+			{
+				console.log("Module Error!");
+				return;
+			}
+            
+            var loader = new THREE.OBJLoader();
+			var piece = this;
+            loader.load(
+                path,
+                function(object)
+                {
+					broken_list = [];
+					object.scale.set(1, 1, 1);
+                    object.position.set(piece.position);
+                    //object.copy(object.clone());
+                    object.traverse
+					( 
+                        function (child) 
+						{
+							if (child instanceof THREE.Mesh) 
+							{
+								//child.material = new THREE.MeshLambertMaterial( {color:0xFF0000,transparent: true} );
+								child.geometry.computeBoundingBox();
+								var center = child.geometry.boundingBox.getCenter();
+								child.geometry.translate(-center.x, -center.y, 0);
+                                //child.castShadow = true;   
+                                //child.receiveShadow = true;
+								child.isChess = true;
+								child.isSelected = false;
+								child.set_pos = function(x, y) {
+                                    this.pos_x = x;
+                                    this.pos_y = y;
+                                    this.position.x = (3.5 - x)*unit_length;
+                                    this.position.y = (y - 3.5)*unit_length;
+                                }
+								broken_list.push(child);
+							}
+						}
+					);
+					for(i=0;i<broken_list.length;i++){
+						if(piece.side=="black")
+							broken_list[i].material = new THREE.MeshPhongMaterial({
+								color: 0x000000,
+								shininess: 0,
+								specular: 0xeeeeee,
+								transparent: true,
+								opacity: 1
+							})
+                     	else 
+                        {
+							broken_list[i].material = new THREE.MeshPhongMaterial({
+								color: 0xeeeeee,
+								shininess: 0,
+								transparent: true,
+								opacity: 1
+							})
+						}
+
+						broken_list[i].set_pos(piece.pos_x,piece.pos_y);
+						scene.add(broken_list[i]);
+					}
+					piece.set_pos(1000,1000);
+					//
+					for(i=0;i<broken_list.length;i++)
+					{
+						var v1 = (dx)/(Math.sqrt(dx*dx+dy*dy));
+						var v2 = (dy)/(Math.sqrt(dx*dx+dy*dy));
+
+						vx[i] = (Math.random())*v1;
+						vy[i] = (Math.random())*v2;
+						vz[i] = (Math.random())*0.1;
+						drot[i] = (Math.random()*2-1)*0.05;
+					}
+					animation_enable = true;
+                    console.log(path+":"+broken_list.length+" pieces loaded");
+                },
+				function(xhr) {
+                    //console.log((xhr.loaded / xhr.total * 100) + '% loaded');
+                },
+                // called when loading has errors
+                function(error) {
+                    console.log( 'An error happened' );
+                }
+            )
+        }
+
+
+		var frameNumber = 400;
+		var vx=[];
+		var vy=[];
+		var drot=[];
+		var vz=[];
+		function playBreakAnimation()
+		{
+			///console.log(frameNumber);
+			/*if(frameNumber>0) frameNumber--;
+			else animation_enable = false;*/
+			var is_finished = true;
+			var i;
+			for(i=0;i<broken_list.length;i++)
+			{
+				//console.log("m");
+				if(broken_list[i].position.z>bound_z[i]){
+					is_finished = false;
+					broken_list[i].position.x+=i*vx[i];
+					broken_list[i].rotation.z+=drot[i];
+					broken_list[i].position.y+=i*vy[i];
+					broken_list[i].position.z+=vz[i];
+					vz[i]-=0.2;
+					//console.log(i+"/"+(broken_list.length-1)+" move!");
+				}
+				else if(broken_list[i].material.opacity>0)
+				{
+					broken_list[i].material.opacity -= fade_v;
+					is_finished = false;
+					if(broken_list[i].material.opacity<0) broken_list[i].material.opacity=0;
+					//console.log(i+"/"+(broken_list.length-1)+": "+broken_list[i].material.opacity);
+				}
+			}
+			if(is_finished==true)
+			{
+				animation_enable = false;
+				for(i=0;i<broken_list.length;i++)
+					scene.remove(broken_list[i]);
+			}
+		}
+
+		var moving_obj = null;
+        var moving_des_x = -1;
+        var moving_des_y = -1;
+		var eaten = 32;
+        var direction_x;
+        var direction_y;
+        var total_distance_in_axis = 0;
+        var is_axis_x = false;
+
+		
+        var load_flag = false;
+		function move_func(x, y, t, jump_height)
+        {
+            var des_x = (3.5 - x)*unit_length;
+            var des_y = (y - 3.5)*unit_length;
+            var cur_distance_x = des_x - this.position.x;
+            var cur_distance_y = des_y - this.position.y;
+            //if(Math.abs( this.position.x - des_x )<5 && 
+              //  Math.abs( this.position.y - des_y)<5)
+            //console.log(eaten+" "+animation_enable+" "+load_flag+" "+jump_height+" "+cur_distance_x+" "+cur_distance_y+" "+this.position.z);
+
+            if(eaten!=32&&animation_enable==false&&load_flag==false)
+                if((jump_height==0&&Math.abs(cur_distance_x)<15&&Math.abs(cur_distance_y)<15)
+                        ||  (jump_height>0&&Math.abs(cur_distance_x)<5&&Math.abs(cur_distance_y)<5&&this.position.z<jump_height/down_speed)  )
+                {
+                    if(haveChess[intersects[0].object.pos_x][intersects[0].object.pos_y] != NONE ){
+                        console.log("Eat "+mesh_list[eaten].side+" "+mesh_list[eaten].name);
+                        //记录当前被吃棋子的名字
+                        //animation_enable = true;
+                        load_flag = true;
+                        mesh_list[eaten].breakDown(direction_x, direction_y);
+                    }
+                }
+            
+
+            if(jump_height==0&&Math.abs(cur_distance_x)<=0.4&&Math.abs(cur_distance_y)<=0.4)
+            {
+                this.position.y = 0;
+                moving_obj = null;
+                this.set_pos(x,y);
+                console.log("Arrive!");
+                return;
+            }
+            else if(jump_height>0&&Math.abs(cur_distance_x)<=5&&Math.abs(cur_distance_y)<=5)
+            {
+                console.log("Jump Arrive 1 !");
+                this.position.z-=jump_height/down_speed;
+                this.set_pos(x,y);
+                //console.log( this.position.z);
+                if(Math.abs(this.position.z)<0.5||this.position.z<0)
+                {
+                    this.position.z = 0;
+                    moving_obj = null;
+                    console.log("Jump Arrive 2!");
+                }
+                return;
+            }
+
+            if(jump_height>0&&cur_distance_x!=0&&cur_distance_y!=0)
+            {
+                var cur_d;
+                if(is_axis_x)  cur_d = cur_distance_x;
+                else cur_d = cur_distance_y;
+
+                var z = ( -jump_height*(cur_d/total_distance_in_axis-0.5)*(cur_d/total_distance_in_axis-0.5) )+jump_height;
+                this.position.z = z;
+            }
+            
+            var vx = cur_distance_x/t;
+            var vy = cur_distance_y/t;
+ 
+            this.position.x += vx;
+            this.position.y += vy;
+        }
+
+ 
+        function initChessSet() {
+            var loader = new THREE.OBJLoader();
+            loader.load(
+                'models/Chess.obj',
+                function (object) {
+                    object.scale.set(1, 1, 1);
+                    object.position.set(0, 0, 0);
+                    object.copy(object.clone());
+                    object.traverse( 
+                        function (child) {
+                            if (child instanceof THREE.Mesh) {
+                                //child.material = new THREE.MeshLambertMaterial( {color:0xFFFFFF,transparent: true} );
+                                 child.geometry.computeBoundingBox();
+                                var center = child.geometry.boundingBox.getCenter();
+                                child.geometry.translate(-center.x, -center.y, 0);
+                                child.set_pos = function(x, y) {
+                                    this.pos_x = x;
+                                    this.pos_y = y;
+                                    this.position.x = (3.5 - x)*unit_length;
+                                    this.position.y = (y - 3.5)*unit_length;
+                                }
+								child.breakDown = loadBrokenModule;
+								/* Chess Piece textures */
+								child.setTexture = function()
+                                {
+                                    if(this.side=="black")
+                                    {
+                                        this.material = new THREE.MeshPhongMaterial({
+                                            color: 0x202020,
+                                            shininess: 80,
+                                            specular: 0xaaaaaa,
+											//transparent: true,
+											opacity: 1
+                                        })
+                                    }
+                                    else 
+                                    {
+                                        this.material = new THREE.MeshPhongMaterial({
+                                            color: 0xeeeeee,
+                                            shininess: 60,
+                                            //transparent: true,
+                                            opacity: 1
+                                        })
+                                    }
+                                }
+								child.moveTo = move_func;
+                                child.castShadow = true;   
+                                child.receiveShadow = true;
+                                child.isChess = true;
+                                child.isSelected = false;
+                                mesh_list.push(child);
+                                chesses.push(child);
+
+								
+                            }
+                        } 
+                    );
+                    // pawn
+                    var pawn = [2, 8, 9, 10, 11, 12, 13, 14];
+                    for (i = 0; i < 8; i++) {
+                        mesh_list[pawn[i]].set_pos(1, i);
+                        mesh_list[pawn[i]].name = "pawn";
+                        mesh_list[pawn[i]].side = "black";
+
+                        mesh_list[pawn[i] + 16].set_pos(6, i);
+                        mesh_list[pawn[i] + 16].name = "pawn";
+                        mesh_list[pawn[i] + 16].side = "white";
+                    }
+                    // king
+                    mesh_list[0].set_pos(0, 3);
+                    mesh_list[0].name = "king";
+                    mesh_list[0].side = "black";
+                    mesh_list[16].set_pos(7, 4);
+                    mesh_list[16].name = "king";
+                    mesh_list[16].side = "white";
+                    // queen
+                    mesh_list[4].set_pos(0, 4);
+                    mesh_list[4].name = "queen";
+                    mesh_list[4].side = "black";
+                    mesh_list[20].set_pos(7, 3);
+                    mesh_list[20].name = "queen";
+                    mesh_list[20].side = "white";
+                    // bishop
+                    mesh_list[3].set_pos(0, 2);
+                    mesh_list[3].name = "bishop";
+                    mesh_list[3].side = "black";
+                    mesh_list[7].set_pos(0, 5);
+                    mesh_list[7].name = "bishop";
+                    mesh_list[7].side = "black";
+                    mesh_list[19].set_pos(7, 5);
+                    mesh_list[19].name = "bishop";
+                    mesh_list[19].side = "white";
+                    mesh_list[23].set_pos(7, 2);
+                    mesh_list[23].name = "bishop";
+                    mesh_list[23].side = "white";
+                    // rook
+                    mesh_list[1].set_pos(0, 0);
+                    mesh_list[1].name = "rook";
+                    mesh_list[1].side = "black";
+                    mesh_list[5].set_pos(0, 7);
+                    mesh_list[5].name = "rook";
+                    mesh_list[5].side = "black";
+                    mesh_list[17].set_pos(7, 7);
+                    mesh_list[17].name = "rook";
+                    mesh_list[17].side = "white";
+                    mesh_list[21].set_pos(7, 0);
+                    mesh_list[21].name = "rook";
+                    mesh_list[21].side = "white";   
+                    // knight
+                    mesh_list[6].set_pos(0, 1);
+                    mesh_list[6].name = "knight";
+                    mesh_list[6].side = "black";               
+                    mesh_list[22].set_pos(0, 6);
+                    mesh_list[22].name = "knight";
+                    mesh_list[22].side = "black";    
+                    mesh_list[15].set_pos(7, 6);
+                    mesh_list[15].name = "knight";
+                    mesh_list[15].side = "white";               
+                    mesh_list[31].set_pos(7, 1);
+                    mesh_list[31].name = "knight";
+                    mesh_list[31].side = "white"; 
+					for(i=0;i<32;i++)
+                        mesh_list[i].setTexture();   
+                    ChessSet.add(object);
+                },
+                function(xhr) {
+                    console.log((xhr.loaded / xhr.total * 100) + '% loaded');
+                },
+                // called when loading has errors
+                function(error) {
+                    console.log( 'An error happened' );
+                }
+            );  
+            scene.add(ChessSet);
+        }
+
+		var curColor;
+		var haveChess;
+		var BLACK_King = 10, BLACK_Queen = 11, BLACK_Knight = 12, BLACK_Rook = 13, BLACK_Bishop = 14, BLACK_Pawn = 15;
+		var WHITE_King = 20, WHITE_Queen = 21, WHITE_Knight = 22, WHITE_Rook = 23, WHITE_Bishop = 24, WHITE_Pawn = 25;
+		var NONE = 0;
+		var curPiece;
+		var IsOver;
+        function initBoard() {
+        	curColor = "black";
+        	IsOver = false;
+        	//mark the position where exists chess
+			haveChess = [[BLACK_Rook,BLACK_Knight,BLACK_Bishop,BLACK_King,BLACK_Queen,BLACK_Bishop,BLACK_Knight,BLACK_Rook],
+						 [BLACK_Pawn,BLACK_Pawn,BLACK_Pawn,BLACK_Pawn,BLACK_Pawn,BLACK_Pawn,BLACK_Pawn,BLACK_Pawn],
+						 [NONE,NONE,NONE,NONE,NONE,NONE,NONE,NONE],
+						 [NONE,NONE,NONE,NONE,NONE,NONE,NONE,NONE],
+						 [NONE,NONE,NONE,NONE,NONE,NONE,NONE,NONE],
+						 [NONE,NONE,NONE,NONE,NONE,NONE,NONE,NONE],
+						 [WHITE_Pawn,WHITE_Pawn,WHITE_Pawn,WHITE_Pawn,WHITE_Pawn,WHITE_Pawn,WHITE_Pawn,WHITE_Pawn],
+						 [WHITE_Rook,WHITE_Knight,WHITE_Bishop,WHITE_Queen,WHITE_King,WHITE_Bishop,WHITE_Knight,WHITE_Rook]];
+			
+			//curColor = "black";
+			
+            console.log(unit_length);
+            var geometry = new THREE.BoxGeometry(unit_length*8, unit_length*8, board_thick);
+            var material = new THREE.MeshLambertMaterial( { color:0x0000FF} );
+            var chessboard = new THREE.Mesh(geometry,material);
+            chessboard.position.set(0, 0, -board_thick/2);
+            scene.add(chessboard);
+
+            for (var i = 0; i < 8; i++){
+                for (var j = 0; j < 8;j++){
+                    var colour;
+                    var geometry = new THREE.BoxGeometry(unit_length, unit_length, 0);
+                    if((i + j)%2)
+                        colour = 0xFFFFFF;
+                    else 
+                        colour = 0x000000;
+                    var material = new THREE.MeshLambertMaterial( { color:colour} );
+                    var cube = new THREE.Mesh(geometry,material);
+                    cube.position.set((3.5 - i)*unit_length, (j - 3.5)*unit_length, 0);
+                    cube.receiveShadow = true;
+                    cube.pos_x = i;
+                    cube.pos_y = j;
+                    cube.isChess = false;
+                    cube.isSelected = false;
+                    chesses.push(cube);
+                    scene.add(cube);
+                }
+            }
+        }
+
+        function initCastle(){
+
+                //windmill
+
+                var onProgress = function ( xhr ) {
+                    if ( xhr.lengthComputable ) {
+                        var percentComplete = xhr.loaded / xhr.total * 100;
+                        console.log( Math.round(percentComplete, 2) + '% downloaded' );
+                    }
+                };
+
+                var onError = function ( xhr ) { };
+
+                THREE.Loader.Handlers.add( /\.dds$/i, new THREE.DDSLoader() );
+
+                var mtlLoader = new THREE.MTLLoader();
+                mtlLoader.setPath( 'models/' );
+                mtlLoader.load( 'windmill.mtl', function( materials ) {
+
+                    materials.preload();
+
+                    var objLoader = new THREE.OBJLoader();
+                    objLoader.setMaterials( materials );
+                    objLoader.setPath( 'models/' );
+                    objLoader.load( 'windmill.obj', function ( object ) {
+
+                        for(var k in object.children){                                
+                            object.children[k].castShadow = true;   
+                            object.children[k].receiveShadow = true;  
+                        }
+                        object.rotateZ(Math.PI/3*2);
+                        object.position.set(-350,-200,0);
+                        object.scale.set(3,3,3);
+                        scene.add( object );
+
+                    }, onProgress, onError );
+
+                });
+
+                // floor
+
+                mtlLoader.load( 'floor.mtl', function( materials ) {
+
+                    materials.preload();
+
+                    var objLoader = new THREE.OBJLoader();
+                    objLoader.setMaterials( materials );
+                    objLoader.setPath( 'models/' );
+                    objLoader.load( 'floor.obj', function ( object ) {
+
+                        for(var k in object.children){                                
+                            object.children[k].castShadow = true;   
+                            object.children[k].receiveShadow = true;  
+                        }
+                        object.rotateZ(Math.PI/2);
+                        object.rotateX(Math.PI/2);
+                        object.position.set(-530,250,0);
+                        object.scale.set(3,3,4);
+                        scene.add( object );
+
+                    }, onProgress, onError );
+
+                });
+
+                //house1
+                mtlLoader.load( 'house1.mtl', function( materials ) {
+
+                    materials.preload();
+
+                    var objLoader = new THREE.OBJLoader();
+                    objLoader.setMaterials( materials );
+                    objLoader.setPath( 'models/' );
+                    //house1_1
+                    objLoader.load( 'house1.obj', function ( object ) {
+
+                        for(var k in object.children){                                
+                            object.children[k].castShadow = true;   
+                            object.children[k].receiveShadow = true;  
+                        }
+                        object.rotateX(Math.PI/2);
+                        object.position.set(-15,-100,0);
+                        object.scale.set(3,3,3);
+                        scene.add( object );
+
+                    }, onProgress, onError );
+
+                    //house1_2
+                    objLoader.load( 'house1.obj', function ( object ) {
+
+                        for(var k in object.children){                                
+                            object.children[k].castShadow = true;   
+                            object.children[k].receiveShadow = true;  
+                        }
+                        object.rotateX(Math.PI/2);
+                        object.rotateY(Math.PI/2);
+                        object.position.set(-390,130,0);
+                        object.scale.set(3,3,3);
+                        scene.add( object );
+
+                    }, onProgress, onError );
+
+                    //house1_3
+                    objLoader.load( 'house1.obj', function ( object ) {
+
+                        for(var k in object.children){                                
+                            object.children[k].castShadow = true;   
+                            object.children[k].receiveShadow = true;  
+                        }
+                        object.rotateX(Math.PI/2);
+                        object.rotateY(Math.PI/2);
+                        object.position.set(-390,205,0);
+                        object.scale.set(3,3,3);
+                        scene.add( object );
+
+                    }, onProgress, onError );
+
+                    //house1_4
+                    objLoader.load( 'house1.obj', function ( object ) {
+
+                        for(var k in object.children){                                
+                            object.children[k].castShadow = true;   
+                            object.children[k].receiveShadow = true;  
+                        }
+                        object.rotateX(Math.PI/2);
+                        object.rotateY(Math.PI/2);
+                        object.position.set(-390,280,0);
+                        object.scale.set(3,3,3);
+                        scene.add( object );
+
+                    }, onProgress, onError );
+
+                });
+
+
+
+                //house2
+                mtlLoader.load( 'house2.mtl', function( materials ) {
+
+                    materials.preload();
+
+                    var objLoader = new THREE.OBJLoader();
+                    objLoader.setMaterials( materials );
+                    objLoader.setPath( 'models/' );
+                    //house2_1
+                    objLoader.load( 'house2.obj', function ( object ) {
+
+                        for(var k in object.children){                                
+                            object.children[k].castShadow = true;   
+                            object.children[k].receiveShadow = true;  
+                        }
+                        object.rotateX(Math.PI/2);
+                        object.position.set(-20,57,0);
+                        object.scale.set(3,3,3);
+                        scene.add( object );
+
+                    }, onProgress, onError );
+
+                    //house2_2
+                    objLoader.load( 'house2.obj', function ( object ) {
+
+                        for(var k in object.children){                                
+                            object.children[k].castShadow = true;   
+                            object.children[k].receiveShadow = true;  
+                        }
+                        object.rotateX(Math.PI/2);
+                        object.rotateY(Math.PI/2);
+                        object.position.set(-390,370,0);
+                        object.scale.set(3,3,3);
+                        scene.add( object );
+
+                    }, onProgress, onError );
+
+                    //house2_3
+                    objLoader.load( 'house2.obj', function ( object ) {
+
+                        for(var k in object.children){                                
+                            object.children[k].castShadow = true;   
+                            object.children[k].receiveShadow = true;  
+                        }
+                        object.rotateX(Math.PI/2);
+                        object.rotateY(Math.PI/2);
+                        object.position.set(-390,445,0);
+                        object.scale.set(3,3,3);
+                        scene.add( object );
+
+                    }, onProgress, onError );
+
+                    //house2_2
+                    objLoader.load( 'house2.obj', function ( object ) {
+
+                        for(var k in object.children){                                
+                            object.children[k].castShadow = true;   
+                            object.children[k].receiveShadow = true;  
+                        }
+                        object.rotateX(Math.PI/2);
+                        object.rotateY(Math.PI/2);
+                        object.position.set(-390,520,0);
+                        object.scale.set(3,3,3);
+                        scene.add( object );
+
+                    }, onProgress, onError );
+
+                });
+
+                //house3
+                mtlLoader.load( 'house3.mtl', function( materials ) {
+
+                    materials.preload();
+
+                    var objLoader = new THREE.OBJLoader();
+                    objLoader.setMaterials( materials );
+                    objLoader.setPath( 'models/' );
+                    //house3_1
+                    objLoader.load( 'house3.obj', function ( object ) {
+
+                        for(var k in object.children){                                
+                            object.children[k].castShadow = true;   
+                            object.children[k].receiveShadow = true;  
+                        }
+                        object.rotateX(Math.PI/2);
+                        object.position.set(-25,160,0);
+                        object.scale.set(3,3,3);
+                        scene.add( object );
+
+                    }, onProgress, onError );
+                    //house3_2
+                    objLoader.load( 'house3.obj', function ( object ) {
+
+                        for(var k in object.children){                                
+                            object.children[k].castShadow = true;   
+                            object.children[k].receiveShadow = true;  
+                        }
+                        object.rotateX(Math.PI/2);
+                        object.position.set(-25,5,0);
+                        object.scale.set(3,3,3);
+                        scene.add( object );
+
+                    }, onProgress, onError );
+
+                });
+
+                //house4
+                mtlLoader.load( 'house4.mtl', function( materials ) {
+
+                    materials.preload();
+
+                    var objLoader = new THREE.OBJLoader();
+                    objLoader.setMaterials( materials );
+                    objLoader.setPath( 'models/' );
+                    objLoader.load( 'house4.obj', function ( object ) {
+
+                        for(var k in object.children){                                
+                            object.children[k].castShadow = true;   
+                            object.children[k].receiveShadow = true;  
+                        }
+                        object.rotateX(Math.PI/2);
+                        object.position.set(25,290,0);
+                        object.scale.set(3,3,3);
+                        scene.add( object );
+
+                    }, onProgress, onError );
+
+                });
+
+                //house5
+                mtlLoader.load( 'house5.mtl', function( materials ) {
+
+                    materials.preload();
+
+                    var objLoader = new THREE.OBJLoader();
+                    objLoader.setMaterials( materials );
+                    objLoader.setPath( 'models/' );
+                    objLoader.load( 'house5.obj', function ( object ) {
+
+                        for(var k in object.children){                                
+                            object.children[k].castShadow = true;   
+                            object.children[k].receiveShadow = true;  
+                        }
+                        object.rotateX(Math.PI/2);
+                        object.position.set(25,350,0);
+                        object.scale.set(3,3,3);
+                        scene.add( object );
+
+                    }, onProgress, onError );
+
+                });
+
+                //tower
+                mtlLoader.load( 'tower.mtl', function( materials ) {
+
+                    materials.preload();
+
+                    var objLoader = new THREE.OBJLoader();
+                    objLoader.setMaterials( materials );
+                    objLoader.setPath( 'models/' );
+                    objLoader.load( 'tower.obj', function ( object ) {
+
+                        for(var k in object.children){                                
+                            object.children[k].castShadow = true;   
+                            object.children[k].receiveShadow = true;  
+                        }
+                        object.rotateX(Math.PI/2);
+                        object.position.set(-85,340,0);
+                        object.scale.set(3,3,3);
+                        scene.add( object );
+
+                    }, onProgress, onError );
+
+                });
+
+                //tower2
+                mtlLoader.load( 'tower2.mtl', function( materials ) {
+
+                    materials.preload();
+
+                    var objLoader = new THREE.OBJLoader();
+                    objLoader.setMaterials( materials );
+                    objLoader.setPath( 'models/' );
+                    objLoader.load( 'tower2.obj', function ( object ) {
+
+                        for(var k in object.children){                                
+                            object.children[k].castShadow = true;   
+                            object.children[k].receiveShadow = true;  
+                        }
+                        object.rotateX(Math.PI/2);
+                        object.position.set(400,560,0);
+                        object.scale.set(4,6,4);
+                        scene.add( object );
+
+                    }, onProgress, onError );
+
+                });
+
+                //tower3
+                mtlLoader.load( 'tower3.mtl', function( materials ) {
+
+                    materials.preload();
+
+                    var objLoader = new THREE.OBJLoader();
+                    objLoader.setMaterials( materials );
+                    objLoader.setPath( 'models/' );
+                    objLoader.load( 'tower3.obj', function ( object ) {
+
+                        for(var k in object.children){                                
+                            object.children[k].castShadow = true;   
+                            object.children[k].receiveShadow = true;  
+                        }
+                        //object.rotateX(Math.PI/2);
+                        object.position.set(0,-300,-40);
+                        object.scale.set(4,4,3.5);
+                        scene.add( object );
+
+                    }, onProgress, onError );
+
+                });
+
+                //wall
+                mtlLoader.load( 'wall.mtl', function( materials ) {
+
+                    materials.preload();
+
+                    var objLoader = new THREE.OBJLoader();
+                    objLoader.setMaterials( materials );
+                    objLoader.setPath( 'models/' );
+                    objLoader.load( 'wall.obj', function ( object ) {
+
+                        for(var k in object.children){                                
+                            object.children[k].castShadow = true;   
+                            object.children[k].receiveShadow = true;  
+                        }
+                        object.rotateZ(Math.PI/2);
+                        object.rotateX(Math.PI/2);
+                        object.position.set(-125,300,10);
+                        object.scale.set(3,3,3);
+                        scene.add( object );
+
+                    }, onProgress, onError );
+
+                });
+
+                //wall2
+                mtlLoader.load( 'wall2.mtl', function( materials ) {
+
+                    materials.preload();
+
+                    var objLoader = new THREE.OBJLoader();
+                    objLoader.setMaterials( materials );
+                    objLoader.setPath( 'models/' );
+                    objLoader.load( 'wall2.obj', function ( object ) {
+
+                        for(var k in object.children){                                
+                            object.children[k].castShadow = true;   
+                            object.children[k].receiveShadow = true;  
+                        }
+                        object.rotateZ(Math.PI);
+                        object.rotateX(Math.PI/2);
+                        object.position.set(400,-500,-20);
+                        object.scale.set(6,5.5,6);
+                        scene.add( object );
+
+                    }, onProgress, onError );
+
+                });
+
+                //tree
+                mtlLoader.load( 'tree.mtl', function( materials ) {
+
+                    materials.preload();
+
+                    var objLoader = new THREE.OBJLoader();
+                    objLoader.setMaterials( materials );
+                    objLoader.setPath( 'models/' );
+                    //tree_1
+                    objLoader.load( 'tree.obj', function ( object ) {
+
+                        for(var k in object.children){                                
+                            object.children[k].castShadow = true;   
+                            object.children[k].receiveShadow = true;  
+                        }
+                        object.position.set(10,160,0);
+                        object.scale.set(5,5,5);
+                        scene.add( object );
+
+                    }, onProgress, onError );
+
+                    objLoader.load( 'tree.obj', function ( object ) {
+
+                        for(var k in object.children){                                
+                            object.children[k].castShadow = true;   
+                            object.children[k].receiveShadow = true;  
+                        }
+                        object.position.set(-90,160,0);
+                        object.scale.set(5,5,5);
+                        scene.add( object );
+
+                    }, onProgress, onError );
+
+                });
+
+                setSkybox(); 
+                setWater();
+
+        }
+
+
+        var parameters = {
+				oceanSide: 1600,
+				size: 5000,
+				distortionScale: 10,
+				alpha: 1
+			};
+        var water;
+        
+        function setWater() {
+
+            var waterGeometry = new THREE.PlaneBufferGeometry( parameters.oceanSide * 5, parameters.oceanSide * 5 );
+            water = new THREE.Water(
+                waterGeometry,
+                {
+                    textureWidth: 512,
+                    textureHeight: 512,
+                    waterNormals: new THREE.TextureLoader().load( 'img/waternormals.jpg', function ( texture ) {
+                        texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+                    }),
+                    alpha: parameters.alpha,
+                    sunDirection: directionallight.position.clone().normalize(),
+                    
+                    sunColor: 0xffffff,
+                    //waterColor: 0x999999,
+                    waterColor: 0x000000,
+                    distortionScale: parameters.distortionScale,
+                    fog: scene.fog !== undefined
+                    
+                }
+            );
+            //water.rotation.z = - Math.PI / 2;
+            water.position.z = -30;
+            water.receiveShadow = true;
+            scene.add( water );
+		}
+
+
+        function setSkybox() {
+
+                var cubeTextureLoader = new THREE.CubeTextureLoader();
+                cubeTextureLoader.setPath( 'background/' );
+
+                cubeMap = cubeTextureLoader.load( [
+                    'pz.jpg','nz.jpg','px.jpg','nx.jpg',
+                    
+                    'py.jpg', 'ny.jpg',
+                ] );
+
+                var cubeShader = THREE.ShaderLib[ 'cube' ];
+                cubeShader.uniforms[ 'tCube' ].value = cubeMap;
+
+                var skyBoxMaterial = new THREE.ShaderMaterial( {
+                    fragmentShader: cubeShader.fragmentShader,
+                    vertexShader: cubeShader.vertexShader,
+                    uniforms: cubeShader.uniforms,
+                    side: THREE.BackSide
+                } );
+
+                var geometry = new THREE.BoxBufferGeometry( 8000, 8000, 8000 );
+
+                cube = new THREE.Mesh( geometry, skyBoxMaterial );
+                cube.position.z=0;
+
+                scene.add( cube );
+
+            }
+
+
+        var move_direction = 0;
+        function onKeyDown(event){               
+            console.log("Key pressed: " + event.keyCode);
+            
+            // Screen shot
+            if(event.keyCode === 80){ 
+				var dataURL = renderer.domElement.toDataURL();
+                alert("Screenshot will be displayed in a new tab.");
+                var w=window.open('about:blank'); 
+                w.document.write("<img src='"+dataURL+"' alt='capturing screenshot'/>"); 
+            } 
+            else if(event.keyCode === 87)    //w
+            {
+                move_direction = 1;
+            }
+            else if(event.keyCode === 65)    //A
+            {
+                move_direction = 3;
+            }
+            else if(event.keyCode === 83)    //S
+            {
+                move_direction = 2;
+            }
+            else if(event.keyCode === 68)    //D
+            {
+                move_direction = 4;
+            }
+            else if(event.keyCode === 81)    //Q
+            {
+                move_direction = 5;
+            }
+            else if(event.keyCode === 69)    //E
+            {
+                move_direction = 6;
+            }
+            else if(event.keyCode === 32)    //space
+            {
+                move_direction = 0;
+            }
+            animate();  
+        }  
+        
+        var INTERSECTED;
+        var ChessIsSelected = false;
+        var SelectedChess = null;
+        var oldmouse_x;
+        var oldmouse_y;
+        function onDocumentMouseMove( event ) {
+
+            event.preventDefault();
+            oldmouse_x = mouse.x;
+            oldmouse_y = mouse.y;
+            mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1;
+            mouse.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
+
+            raycaster.setFromCamera( mouse, camera );
+            
+            var intersects = raycaster.intersectObjects(chesses);
+
+            /*if ( intersects.length > 0 ) {
+
+                intersects[ 0 ].object.material.color.setHex( Math.random() * 0xffffff );
+
+                var particle = new THREE.Sprite( particleMaterial );
+                particle.position.copy( intersects[ 0 ].point );
+                particle.scale.x = particle.scale.y = 16;
+                scene.add( particle );
+
+            }*/
+            if ( intersects.length > 0 ) {
+
+                if ( INTERSECTED != intersects[ 0 ].object ) {
+
+                    if ( INTERSECTED ) INTERSECTED.material.emissive.setHex( INTERSECTED.currentHex );
+
+                    INTERSECTED = intersects[ 0 ].object;
+                    INTERSECTED.currentHex = INTERSECTED.material.emissive.getHex();
+                    INTERSECTED.material.emissive.setHex( 0x123456 );
+
+                }
+
+            } 
+            else {
+
+                if ( INTERSECTED ) INTERSECTED.material.emissive.setHex( INTERSECTED.currentHex );
+
+                INTERSECTED = null;
+
+            }
+
+        }
+
+		var intersects = null;
+		//var interaction_enable = true;
+		function set_motion(piece, tx, ty)
+		{
+			moving_obj = piece;
+            moving_des_x =  tx;
+            moving_des_y =  ty;
+            direction_x = intersects[0].object.position.x - SelectedChess.position.x;
+            direction_y = intersects[0].object.position.y - SelectedChess.position.y;
+			eaten = getPiece(tx, ty);
+            load_flag=false;
+			if(intersects[0].object.position.x - SelectedChess.position.x)
+			{
+				total_distance_in_axis = intersects[0].object.position.x - SelectedChess.position.x;
+
+				is_axis_x = true;
+			}
+			else 
+			{
+				total_distance_in_axis= (intersects[0].object.position.y - SelectedChess.position.y)
+				is_axis_x = false;
+			}
+		}	
+		var action = false;
+        function onDocumentMouseDown( event ) {
+
+            event.preventDefault();
+			
+
+            mouse.x = ( event.clientX / renderer.domElement.clientWidth ) * 2 - 1;
+            mouse.y = - ( event.clientY / renderer.domElement.clientHeight ) * 2 + 1;
+
+            raycaster.setFromCamera( mouse, camera );
+
+            intersects = raycaster.intersectObjects(chesses);
+            if(enable_roam||IsOver) return;
+            if ( intersects.length > 0 ) {
+                /* 点到棋子 */
+                if (intersects[0].object.isChess) {
+					if(!ChessIsSelected&&intersects[0].object.side!=curColor)
+					{
+						return;
+					}
+					if(!ChessIsSelected&&intersects[0].object.side==curColor)
+					{
+						ChessIsSelected = true;
+                        SelectedChess = intersects[0].object;
+						SelectedChess.isSelected=true;
+						return;
+					}
+					if(ChessIsSelected&&intersects[0].object.side==curColor)
+					{
+						SelectedChess.isSelected = false;
+						SelectedChess = intersects[0].object;
+						SelectedChess.isSelected=true;
+						return;
+					}
+				}
+                if(animation_enable||moving_obj!=null) return;
+				console.log("Click "+intersects[0].object.name+ " "+intersects[0].object.side);
+				if(ChessIsSelected)
+				{
+					console.log("Move");
+					var canMove = false;
+					if(SelectedChess.name == "rook"){
+						if(checkRook(SelectedChess,intersects[0].object)==true) canMove = true;
+					}
+					else if(SelectedChess.name == "queen"){
+						if(checkQuene(SelectedChess,intersects[0].object)==true) canMove = true;
+					}
+					else if(SelectedChess.name == "king"){
+						if(checkKing(SelectedChess,intersects[0].object)==true) canMove = true;
+					}
+					else if(SelectedChess.name == "bishop"){
+						if(checkBishop(SelectedChess,intersects[0].object)==true) canMove = true;
+					}
+					else if(SelectedChess.name == "knight"){
+						if(checkKnight(SelectedChess,intersects[0].object)==true) canMove = true;
+					}
+					else if(SelectedChess.name == "pawn"){
+						if(checkPawn(SelectedChess,intersects[0].object)==true) canMove = true;
+					}
+					else {
+						canMove = false;
+					}
+					
+					if(canMove == true){
+						set_motion(SelectedChess, intersects[0].object.pos_x,intersects[0].object.pos_y);
+		
+						if(haveChess[intersects[0].object.pos_x][intersects[0].object.pos_y] != NONE ){
+							//console.log("Eat");
+							//记录当前被吃棋子的名字
+							curPiece = haveChess[intersects[0].object.pos_x][intersects[0].object.pos_y];
+							//吃子动画
+							//mesh_list[getPiece(intersects[0].object.pos_x,intersects[0].object.pos_y)].set_pos(1000,1000);
+						}
+						haveChess[SelectedChess.pos_x][SelectedChess.pos_y] = NONE;
+						if(SelectedChess.side == "black" && SelectedChess.name == "king"){
+							haveChess[intersects[0].object.pos_x][intersects[0].object.pos_y] = BLACK_King;
+						}
+						else if(SelectedChess.side == "black" && SelectedChess.name == "queen"){
+							haveChess[intersects[0].object.pos_x][intersects[0].object.pos_y] = BLACK_Queen;
+						}
+						else if(SelectedChess.side == "black" && SelectedChess.name == "rook"){
+							haveChess[intersects[0].object.pos_x][intersects[0].object.pos_y] = BLACK_Rook;
+						}
+						else if(SelectedChess.side == "black" && SelectedChess.name == "knight"){
+							haveChess[intersects[0].object.pos_x][intersects[0].object.pos_y] = BLACK_Knight;
+						}
+						else if(SelectedChess.side == "black" && SelectedChess.name == "bishop"){
+							haveChess[intersects[0].object.pos_x][intersects[0].object.pos_y] = BLACK_Bishop;
+						}
+						else if(SelectedChess.side == "black" && SelectedChess.name == "pawn"){
+							haveChess[intersects[0].object.pos_x][intersects[0].object.pos_y] = BLACK_Pawn;
+						}
+						else if(SelectedChess.side == "white" && SelectedChess.name == "king"){
+							haveChess[intersects[0].object.pos_x][intersects[0].object.pos_y] = WHITE_King;
+						}
+						else if(SelectedChess.side == "white" && SelectedChess.name == "queen"){
+							haveChess[intersects[0].object.pos_x][intersects[0].object.pos_y] = WHITE_Queen;
+						}
+						else if(SelectedChess.side == "white" && SelectedChess.name == "rook"){
+							haveChess[intersects[0].object.pos_x][intersects[0].object.pos_y] = WHITE_Rook;
+						}
+						else if(SelectedChess.side == "white" && SelectedChess.name == "knight"){
+							haveChess[intersects[0].object.pos_x][intersects[0].object.pos_y] = WHITE_Knight;
+						}
+						else if(SelectedChess.side == "white" && SelectedChess.name == "bishop"){
+							haveChess[intersects[0].object.pos_x][intersects[0].object.pos_y] = WHITE_Bishop;
+						}
+						else if(SelectedChess.side == "white" && SelectedChess.name == "pawn"){
+							haveChess[intersects[0].object.pos_x][intersects[0].object.pos_y] = WHITE_Pawn;
+						}
+					
+						//SelectedChess.set_pos(intersects[0].object.pos_x, intersects[0].object.pos_y);
+						ChessIsSelected = false;
+						SelectedChess.isSelected = false;
+						
+						if(curColor == "black") curColor = "white";
+						else if(curColor == "white") curColor = "black";
+	
+						if(curPiece == BLACK_King || curPiece == WHITE_King){
+							//游戏结束
+							IsOver = true;
+						}
+					
+					}
+					
+				}
+				else {
+					/*do nothing*/
+					SelectedChess= null;
+				}
+            }
+        }
+        
+
+		function getPiece(des_x,des_y){
+			var desPiece = 32;
+			for(var i = 0; i < 32;i++){
+				if(mesh_list[i].pos_x == des_x && mesh_list[i].pos_y == des_y){
+					desPiece = i;
+					break;
+				}			
+			}
+			return desPiece;
+		}
+
+		//precheck
+    	function preCheck(cur,cur_x,cur_y,des_x,des_y){
+    		if(cur_x < 0 || cur_x > 7 || des_x < 0 || des_x > 7 || cur_y < 0 || cur_y > 7 || des_y < 0 || des_y > 7){
+    			return false;
+    		}
+    		if(cur.side != curColor) return false;
+    		var des_side;
+    		if(haveChess[des_x][des_y] >= 10 && haveChess[des_x][des_y] <= 15) des_side = "black";
+    		else if(haveChess[des_x][des_y] >= 20) des_side = "white";
+    		if(des_side == curColor) return false;
+    		return true;
+    	}
+    	
+    	//check if move is vertical or horizontal
+    	function verOrhorCheck(cur_x,cur_y,des_x,des_y){
+    		var dx = des_x - cur_x;
+    		var dy = des_y - cur_y;
+    	    if(dx == 0 || dy == 0)return true;
+    	    else return false;
+    	}
+    	
+    	//check if move is diagonal
+    	function diagonalCheck(cur_x,cur_y,des_x,des_y){
+    		var dx = Math.abs(cur_x - des_x);
+    		var dy = Math.abs(cur_y - des_y);
+    		if(dx == dy ) return true;
+    		else return false;
+    	}
+    	
+    	//check if this path has another piece
+    	function collisionCheck(cur_x,cur_y,des_x,des_y){
+    		var dx = 0;
+    		if(cur_x < des_x) dx = 1;
+    		if(cur_x > des_x) dx = -1;
+    		var dy = 0;
+    		if(cur_y < des_y) dy = 1;
+    		if(cur_y > des_y) dy = -1;
+    		
+    		if(dy == 0) return horCollisionCheck(dx,dy,cur_x,cur_y,des_x,des_y);
+    		else if(dx == 0) return verCollisionCheck(dx,dy,cur_x,cur_y,des_x,des_y);
+    		else return diaCollisionCheck(dx,dy,cur_x,cur_y,des_x,des_y);
+    	}
+    
+    	//check if horizontal path has another piece
+    	function horCollisionCheck(dx,dy,cur_x,cur_y,des_x,des_y){
+    		if (dx < 0) {
+				for (var i = cur_x + dx; i > des_x; i += dx)
+					if (haveChess[i][cur_y]!= 0) return true;
+			}
+			else {
+				for (var i = cur_x + dx; i < des_x; i += dx)
+					if (haveChess[i][cur_y]!= 0) return true;
+			}
+			return false;
+    	}
+    	
+    	//check if vertical path has another piece
+    	function verCollisionCheck(dx,dy,cur_x,cur_y,des_x,des_y){
+    		if (dy < 0) {
+				for (var i = cur_y + dy; i > des_y; i += dy)
+					if (haveChess[cur_x][i]!= 0) return true;
+			}
+			else {
+				for (var i = cur_y + dy; i < des_y; i += dy)
+					if (haveChess[cur_x][i]!= 0) return true;
+			}
+			return false;
+    	}
+    	
+    	//check if diagonal path has another piece
+    	function diaCollisionCheck(dx,dy,cur_x,cur_y,des_x,des_y){
+    		var j = cur_y + dy,
+			    i = cur_x + dx;
+
+			if (dx < 0 && dy < 0) {
+				for (; i > des_x && j > des_y; i += dx, j += dy)
+					if (haveChess[i][j] != 0) return true;
+			}
+			else if (dx < 0 && dy > 0) {
+				for (; i > des_x && j < des_y; i += dx, j += dy)
+					if (haveChess[i][j] != 0) return true;
+			}
+			else if (dx > 0 && dy < 0) {
+				for (; i < des_x && j > des_y; i += dx, j += dy)
+					if (haveChess[i][j] != 0) return true;
+			}
+			else if (dx > 0 && dy > 0) {
+				for (; i < des_x && j < des_y; i += dx, j += dy)
+					if (haveChess[i][j] != 0) return true;
+			}
+	
+			return false;
+    	}
+    
+    
+    
+		function checkRook(cur,des){
+			if(!preCheck(cur,cur.pos_x,cur.pos_y,des.pos_x,des.pos_y)) return false;
+			if(!verOrhorCheck(cur.pos_x,cur.pos_y,des.pos_x,des.pos_y)) return false;
+			if(collisionCheck(cur.pos_x,cur.pos_y,des.pos_x,des.pos_y)) return false;
+			return true;
+		}
+		
+		function checkKing(cur,des){
+			if(!preCheck(cur,cur.pos_x,cur.pos_y,des.pos_x,des.pos_y)) return false;
+			var dx = Math.abs(cur.pos_x - des.pos_x);
+			var dy = Math.abs(cur.pos_y - des.pos_y);
+			if(dx > 1 | dy > 1) return false;
+			return true;
+		}
+		
+		function checkQuene(cur,des){
+			if(!preCheck(cur,cur.pos_x,cur.pos_y,des.pos_x,des.pos_y)) return false;
+			if(!verOrhorCheck(cur.pos_x,cur.pos_y,des.pos_x,des.pos_y) && !diagonalCheck(cur.pos_x,cur.pos_y,des.pos_x,des.pos_y)) return false;
+			if(collisionCheck(cur.pos_x,cur.pos_y,des.pos_x,des.pos_y)) return false;
+			return true;
+		}
+		
+		function checkKnight(cur,des){
+			if(!preCheck(cur,cur.pos_x,cur.pos_y,des.pos_x,des.pos_y)) return false;
+			var dx = Math.abs(cur.pos_x - des.pos_x);
+			var dy = Math.abs(cur.pos_y - des.pos_y);
+			if((dx!=2 || dy!=1)&&(dx!=1 || dy!=2)) return false;
+			return true;
+		}
+		
+		function checkBishop(cur,des){
+			if(!preCheck(cur,cur.pos_x,cur.pos_y,des.pos_x,des.pos_y)) return false;
+			if(!diagonalCheck(cur.pos_x,cur.pos_y,des.pos_x,des.pos_y)) return false;
+			if(collisionCheck(cur.pos_x,cur.pos_y,des.pos_x,des.pos_y)) return false;
+			return true;
+		}
+		
+		function checkPawn(cur,des){
+			if(!preCheck(cur,cur.pos_x,cur.pos_y,des.pos_x,des.pos_y)) return false;
+			var dx = des.pos_x - cur.pos_x;
+			if((cur.side == "black" && dx < 0 )||(cur.side == "white"&& dx > 0)) return false;
+			if(Math.abs(dx) < 1) return false;
+			if(Math.abs(dx) > 1) {
+				if((cur.side == "black" && cur.pos_x != 1) ||
+				(cur.side == "white" && cur.pos_x != 6)) return false;
+				if(Math.abs(dx)>2) return false;
+			}
+			
+			if(cur.pos_y != des.pos_y){
+				if(Math.abs(cur.pos_x - des.pos_x) != 1 )return false;
+				if(Math.abs(cur.pos_y - des.pos_y) != 1 )return false;
+				if(haveChess[des.pos_x][des.pos_y] == NONE) return false;
+			}
+			
+			if(cur.pos_y == des.pos_y && haveChess[des.pos_x][des.pos_y] != NONE) return false;
+			return true;
+		}
+
+		
+
+        // 窗口缩放
+        function onWindowResize() {  
+            windowHalfX = window.innerWidth / 2;  
+            windowHalfY = window.innerHeight / 2;  
+          
+            camera.aspect = window.innerWidth / window.innerHeight;  
+            camera.updateProjectionMatrix();  
+          
+            renderer.setSize( window.innerWidth, window.innerHeight );  
+        }  
+
+
+
+        var roam_pos = [0,0,roam_height];
+        var roam_direction = [0,0];
+        var old_camera = [];
+        var old_enable_roam = enable_roam;
+        
+        function storeCamera()
+        {
+            old_camera=
+            [
+                camera.position.x,
+                camera.position.y,
+                camera.position.z,
+                camera.up.x,
+                camera.up.y,
+                camera.up.z
+            ];
+        }
+        function recoverCamera()
+        {
+            camera.position.x = old_camera[0];
+            camera.position.y = old_camera[1];
+            camera.position.z = old_camera[2];
+            camera.up.x = old_camera[3];
+            camera.up.y = old_camera[4];
+            camera.up.z = old_camera[5];
+            camera.lookAt(0, 0, 0);
+        }
+        var clk = 0;
+        function roam_func()
+        {
+            var len_xy = Math.cos(roam_direction[1]);
+            //var oldmouse_x = mouse.x;
+            var old
+            camera.position.set(roam_pos[0],roam_pos[1],roam_pos[2]);
+            camera.lookAt(
+                roam_pos[0]+1000*len_xy*Math.cos(roam_direction[0])
+                ,roam_pos[2]+1000*len_xy*Math.sin(roam_direction[0])
+                ,roam_pos[1]+1000*Math.sin(roam_direction[1])
+                );
+            
+
+            if( Math.abs(mouse.x)>0.4)
+                roam_direction[0]-= (mouse.x)*0.01;
+            if( Math.abs(mouse.y)>0.4)
+                roam_direction[1]+= (mouse.y)*0.01;
+
+            //roam_direction[0]+=mouseMove[0];
+            if(roam_direction[1]>=Math.PI/2) roam_direction[1] = Math.PI/2;
+            else if(roam_direction[1]<-Math.PI/3) roam_direction[1] = -Math.PI/3;
+           
+
+
+            if(move_direction==1)   // front
+            {
+                roam_pos[0]+= gui_params.roamSpeed* len_xy*Math.cos(roam_direction[0]);
+                roam_pos[1]+= gui_params.roamSpeed*len_xy*Math.sin(roam_direction[0]);
+                roam_pos[2]+= gui_params.roamSpeed*Math.sin(roam_direction[1])
+            }
+            else if(move_direction==2)  // back
+            {
+                roam_pos[0]-=gui_params.roamSpeed*len_xy*Math.cos(roam_direction[0]);
+                roam_pos[1]-=gui_params.roamSpeed*len_xy*Math.sin(roam_direction[0]);
+                roam_pos[2]-=gui_params.roamSpeed*Math.sin(roam_direction[1]);
+            }
+            else if(move_direction==4)  // right
+            {
+                roam_pos[1]-=gui_params.roamSpeed*len_xy*Math.cos(roam_direction[0])*0.5;
+                roam_pos[0]+=gui_params.roamSpeed*len_xy*Math.sin(roam_direction[0])*0.5;
+                //roam_pos[2]+=roamSpeed*Math.sin(roam_direction[1]);
+            }
+            else if(move_direction==3)  // left
+            {
+                roam_pos[1]+=gui_params.roamSpeed*len_xy*Math.cos(roam_direction[0])*0.5;
+                roam_pos[0]-=gui_params.roamSpeed*len_xy*Math.sin(roam_direction[0])*0.5;
+                //roam_pos[2]+=roamSpeed*Math.sin(roam_direction[1]);
+            }
+            else if(move_direction==5)
+            {
+                roam_pos[2]+=gui_params.roamSpeed;
+            }
+            else if(move_direction==6)
+            {
+                roam_pos[2]-=gui_params.roamSpeed;
+            }
+            
+            if( roam_pos[2]<=roam_height)  roam_pos[2] = roam_height;
+            clk+=Math.PI/50;
+            console.log("Mouse move: "+mouse.x+", "+mouse.y);
+            //console.log("Old Mouse: "+oldmouse_x+", "+oldmouse_y);
+            //console.log("Mouse: "+mouse.x+", "+mouse.x);
+
+        }
+
+        // 绘制函数
+        function animate() {
+			if(moving_obj!=null)
+            { 
+				if(moving_obj.name=="knight")
+                	moving_obj.moveTo(moving_des_x, moving_des_y,v_jump, 100);
+				else moving_obj.moveTo(moving_des_x, moving_des_y,v_move, 0);
+            }
+			if(animation_enable==true)
+			{
+				//console.log("b");
+				playBreakAnimation();
+			}
+
+            renderer.shadowMap.enabled = gui_params.shadows;
+            water.visible = gui_params.water;
+            enable_roam = gui_params.roam;
+            directionallight.castShadow = gui_params.shadows;
+            directionallight.intensity = gui_params.directionalLight;
+            ambientlight.intensity = gui_params.ambientLight;
+            //stats.update();
+
+            //console.log("enable_roam:" + enable_roam);
+
+            if(enable_roam) {
+                if(old_enable_roam==false)
+                {
+                    storeCamera();
+                    old_enable_roam = enable_roam;
+                }
+                console.log("roam!");
+                roam_func();
+            }
+            else
+            {
+                if(old_enable_roam==true)
+                {
+                    recoverCamera();
+                    old_enable_roam = enable_roam;
+                }
+            }
+
+            water.material.uniforms.time.value += 30 / 60.0;
+            water.material.uniforms.size.value = parameters.size;
+            water.material.uniforms.distortionScale.value = parameters.distortionScale;
+            water.material.uniforms.alpha.value = parameters.alpha;
+
+            renderer.clear();
+            renderer.render(scene, camera);
+            controls.update();
+            requestAnimationFrame( animate );
+        }
+
+        // 主函数
+        function threeStart() {
+            initThree();
+            initCamera();
+            initScene();
+            initLight();
+            initGUI();
+            initCastle();
+            initChessSet();
+            
+            initBoard();
+			
+            animate();
+           
+        }
+	</script>
+	
+	<script>                     
+			function changeImage()
+			{
+				var path_1 = "img/source_1.png" ;
+				var path_2 = "img/source_2.png" ;
+				var path_3 = "img/result_1.png" ;
+				var path_4 = "img/result_2.png" ;
+				var bufferImage_1 = new Image(); //缓冲图片
+				var bufferImage_2 = new Image(); //缓冲图片
+				bufferImage_1.src = path_1;
+				bufferImage_2.src = path_2;
+				var bufferImage_3 = new Image(); //缓冲图片
+				bufferImage_3.src = path_3;
+				var bufferImage_4 = new Image(); //缓冲图片
+				bufferImage_4.src = path_4;
+				if(curColor == "black")
+				document.getElementById("image1").src=bufferImage_1.src;
+				else document.getElementById("image1").src=bufferImage_2.src;	
+				
+				if(curColor == "white")
+				document.getElementById("image2").src=bufferImage_1.src;
+				else document.getElementById("image2").src=bufferImage_2.src;	
+				
+				if(IsOver == true){
+					document.getElementById("image3").width = 420;
+					document.getElementById("image3").height = 50;
+					if(curPiece == BLACK_King){
+						document.getElementById("image3").src=bufferImage_4.src;
+					}
+					else if(curPiece == WHITE_King){
+						document.getElementById("image3").src=bufferImage_3.src;
+					}
+				}
+				else{
+					document.getElementById("image3").width = 0;
+					document.getElementById("image3").height = 0;
+				}
+			}
+			setInterval("changeImage();", 500);
+			
+	</script>
+</head>
+
+<body style="margin: 0; font: arial" onload="threeStart();">	
+	<div id="canvas-frame"></div>
+
+	<form id="settingsForm" style="left: 0; top: 0; padding-left: 8px">
+		My Chess:
+		<br/>
+		black side <img id ="image1" src="" width='20' height='20'/>
+		<br/>
+		white side <img id ="image2" src="" width='20' height='20'/>
+		<br/>
+		<br/>
+		<br/>
+		<br/>
+		result 
+		<br/>
+		<img id ="image3" src="" width='' height=''/>
+	</form>
+	<button type="button" onclick="document.location.reload();">New Game</button>
+</body>
+</html>

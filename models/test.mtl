@@ -1,0 +1,47 @@
+# Exported from 3D Builder
+
+newmtl phong1SG
+Kd 0.350000 1.210000 1.210000
+
+newmtl lambert6SG
+Kd 1.000000 1.000000 1.000000
+map_Kd wall.jpg
+
+newmtl lambert3SG
+Kd 1.000000 1.000000 1.000000
+map_Kd 2011430135830664.jpg
+
+newmtl phongE2SG
+Kd 1.000000 1.000000 1.000000
+map_Kd 179636_123748007722_2.jpg
+
+newmtl blinn1SG
+Kd 1.000000 1.000000 1.000000
+map_Kd roof2.jpg
+
+newmtl initialShadingGroup
+Kd 0.500000 0.500000 0.500000
+
+newmtl lambert5SG
+Kd 1.000000 1.000000 1.000000
+map_Kd brick_wall.jpg
+
+newmtl lambert4SG
+Kd 1.000000 1.000000 1.000000
+map_Kd roof43.jpg
+
+newmtl phongE1SG
+Kd 1.000000 1.000000 1.000000
+map_Kd wood.jpg
+
+newmtl lambert7SG
+Kd 1.000000 1.000000 1.000000
+map_Kd window1.jpg
+
+newmtl pasted__pasted__lambert7SG
+Kd 1.000000 1.000000 1.000000
+map_Kd 3234197.jpg
+
+newmtl pasted__lambert7SG
+Kd 1.000000 1.000000 1.000000
+map_Kd window2.jpg

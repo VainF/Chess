@@ -1,0 +1,36 @@
+# Exported from 3D Builder
+
+newmtl lambert7SG
+Kd 1.000000 1.000000 1.000000
+map_Kd window1.jpg
+
+newmtl lambert6SG
+Kd 1.000000 1.000000 1.000000
+map_Kd wall.jpg
+
+newmtl initialShadingGroup
+Kd 0.500000 0.500000 0.500000
+
+newmtl lambert4SG
+Kd 1.000000 1.000000 1.000000
+map_Kd roof43.jpg
+
+newmtl phongE1SG
+Kd 1.000000 1.000000 1.000000
+map_Kd wood.jpg
+
+newmtl lambert8SG
+Kd 1.000000 1.000000 1.000000
+map_Kd curtain2.jpg
+
+newmtl lambert9SG
+Kd 1.000000 1.000000 1.000000
+map_Kd chimney.png
+
+newmtl lambert3SG
+Kd 1.000000 1.000000 1.000000
+map_Kd 2011430135830664.jpg
+
+newmtl pasted__pasted__lambert7SG
+Kd 1.000000 1.000000 1.000000
+map_Kd 3234197.jpg

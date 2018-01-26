@@ -1,0 +1,24 @@
+# Exported from 3D Builder
+
+newmtl phong1SG
+Kd 1.000000 1.000000 1.000000
+map_Kd stone.jpg
+
+newmtl lambert3SG
+Kd 1.000000 1.000000 1.000000
+map_Kd wall.jpg
+
+newmtl phong2SG
+Kd 1.000000 1.000000 1.000000
+map_Kd gate_tex.jpg
+
+newmtl lambert2SG
+Kd 1.000000 1.000000 1.000000
+map_Kd roof43.jpg
+
+newmtl initialShadingGroup
+Kd 0.500000 0.500000 0.500000
+
+newmtl phong3SG
+Kd 1.000000 1.000000 1.000000
+map_Kd wood.jpg

@@ -1,0 +1,9 @@
+# Exported from 3D Builder
+
+newmtl lambert6SG
+Kd 1.000000 1.000000 1.000000
+map_Kd wall.jpg
+
+newmtl lambert7SG
+Kd 1.000000 1.000000 1.000000
+map_Kd brick_wall.jpg
